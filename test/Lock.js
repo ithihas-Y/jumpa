@@ -6,6 +6,7 @@ const fromWei = (num) => ethers.utils.formatEther(num);
 describe("NFTMarketplace", function () {
   let nft;
   let nft2;
+  let nft3;
   let mytoken;
   let mytoken2;
   let marketplace;
@@ -26,6 +27,7 @@ describe("NFTMarketplace", function () {
     // To deploy our contracts
     nft = await NFT.deploy();
     nft2 = await NFT.deploy();
+    nft3 = await NFT.deploy();
     mytoken = await MyToken.deploy();
     mytoken2 = await MyToken.deploy();
     marketplace = await Marketplace.deploy(nft.address, mytoken.address);
@@ -215,7 +217,7 @@ describe("NFTMarketplace", function () {
         expect(await nft.ownerOf(1)).to.equal(addr2.address);
 
         //approving marketplace to sell nft for addr2
-        await nft.connect(addr2).approve(marketplace.address, 1);
+        await nft.connect(addr2).setApprovalForAll(marketplace.address, 1);
         //placing nft for sale
         await expect(
           marketplace
@@ -225,6 +227,118 @@ describe("NFTMarketplace", function () {
           .to.emit(marketplace, "sellEvent")
           .withArgs(addr2.address, nft.address, 1, toWei(100), mytoken.address);
         expect(await nft.ownerOf(1)).to.equal(addr2.address);
+      });
+    });
+  });
+
+  describe("Nft collection", function () {
+    beforeEach(async function () {
+      //minting nft
+      await nft.connect(addr1).mint(URI);
+      await nft2.connect(addr1).mint(URI);
+      await nft3.connect(addr1).mint(URI);
+
+      //approving spending of nft in marketplace
+      await nft.connect(addr1).setApprovalForAll(marketplace.address, true);
+      await nft2.connect(addr1).setApprovalForAll(marketplace.address, true);
+      await nft3.connect(addr1).setApprovalForAll(marketplace.address, true);
+
+      //approving spending of erc20 token on marketplace
+      await mytoken.connect(addr1).approve(marketplace.address, toWei(1000));
+      await mytoken.connect(addr2).approve(marketplace.address, toWei(1000));
+
+      //adding nftaddress to marketplace list
+      await marketplace.approveNFtType(nft2.address);
+      await marketplace.approveNFtType(nft3.address);
+    });
+
+    describe("listing collection of nft in marketplace", function () {
+      it("listing", async function () {
+        await expect(
+          marketplace
+            .connect(addr1)
+            .collectionForSale(
+              nft.address,
+              1,
+              nft2.address,
+              1,
+              nft3.address,
+              1,
+              toWei(100),
+              mytoken.address
+            )
+        )
+          .to.emit(marketplace, "collectionSaleEvent")
+          .withArgs(
+            addr1.address,
+            nft.address,
+            1,
+            nft2.address,
+            1,
+            nft3.address,
+            1,
+            toWei(100),
+            mytoken.address
+          );
+      });
+
+      it("bidding", async function () {
+        await marketplace
+          .connect(addr1)
+          .collectionForSale(
+            nft.address,
+            1,
+            nft2.address,
+            1,
+            nft3.address,
+            1,
+            toWei(100),
+            mytoken.address
+          );
+
+        await expect(marketplace.connect(addr2).bidForCollection(1, toWei(200)))
+          .to.emit(marketplace, "collectionBidEvent")
+          .withArgs(
+            addr2.address,
+            nft.address,
+            1,
+            nft2.address,
+            1,
+            nft3.address,
+            1,
+            toWei(200)
+          );
+      });
+
+      it("selling", async function () {
+        await marketplace
+          .connect(addr1)
+          .collectionForSale(
+            nft.address,
+            1,
+            nft2.address,
+            1,
+            nft3.address,
+            1,
+            toWei(100),
+            mytoken.address
+          );
+
+        await marketplace.connect(addr2).bidForCollection(1, toWei(200));
+
+        await expect(marketplace.connect(addr1).sellCollectionForBid(1))
+          .to.emit(marketplace, "collectionBuyEvent")
+          .withArgs(
+            addr2.address,
+            addr1.address,
+            toWei(200),
+            nft.address,
+            1,
+            nft2.address,
+            1,
+            nft3.address,
+            1
+          );
       });
     });
   });
