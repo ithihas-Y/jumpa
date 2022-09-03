@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract MarketPlace is Ownable {
+contract MarketPlace1 is Ownable {
 
     //add events bid,buy,sell
 

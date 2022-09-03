@@ -323,6 +323,9 @@ describe("NFTMarketplace", function () {
             toWei(100),
             mytoken.address
           );
+        expect(await nft.ownerOf(1)).to.equal(addr1.address);
+        expect(await nft2.ownerOf(1)).to.equal(addr1.address);
+        expect(await nft3.ownerOf(1)).to.equal(addr1.address);
 
         await marketplace.connect(addr2).bidForCollection(1, toWei(200));
 
@@ -339,6 +342,9 @@ describe("NFTMarketplace", function () {
             nft3.address,
             1
           );
+        expect(await nft.ownerOf(1)).to.equal(addr2.address);
+        expect(await nft2.ownerOf(1)).to.equal(addr2.address);
+        expect(await nft3.ownerOf(1)).to.equal(addr2.address);
       });
     });
   });
