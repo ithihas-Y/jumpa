@@ -23,8 +23,10 @@ contract MarketPlace1 is Ownable {
 
     struct collectionData{
         uint nftCount;
-        mapping (uint => NFTData) collectionItem ;
+        // mapping (uint => NFTData) collectionItem ;
         // NFTData [] collectionItem;
+        IERC721[] nftAddress;
+        uint256[] nftId;
         uint256 price;
         IERC20 tokenAddress;
     }
@@ -39,8 +41,9 @@ contract MarketPlace1 is Ownable {
     event bidEvent(address buyer, IERC721 nft,uint256 NftId,uint256 bidAmount);
     event sellEvent(address seller, IERC721 nft,uint256 NftId,uint256 askingPrice, IERC20 tokenAddress);
 
-    event collectionSaleEvent(address seller , NFTData[] nftdata, uint price, IERC20 tokenAddress);
-    event collectionBidEvent(address buyer , NFTData[] nftdata, uint bidAmount);
+    event collectionSaleEvent(address seller , IERC721[] nftAddress, uint[] nftId, uint price, IERC20 tokenAddress);
+    event collectionBidEvent(address buyer , IERC721[] nftAddress, uint[] nftId, uint bidAmount);
+    event collectionBuyEvent(address buyer,address seller, uint256 finalprice,IERC721[] nft,uint256[] NftId);
 
     uint256 public total;
 
@@ -70,37 +73,39 @@ contract MarketPlace1 is Ownable {
         allowedCrypto[_token] = true;
     }
 
-    function collectionForSale(NFTData[] memory _collection, uint _price, IERC20 _tokenAddress ) external{
-        require(_collection.length>1);
+    function collectionForSale(IERC721[] memory _nftAddress,uint[] memory _nftid, uint _price, IERC20 _tokenAddress ) external{
+        require(_nftAddress.length==_nftid.length);
+        require(_nftAddress.length>1);
         require(_price >0);
         require(allowedCrypto[_tokenAddress]==true);
-        for(uint i=0; i<_collection.length;i++){
-            require(supported[_collection[i].nft]==true);
-            require(_collection[i].nft.isApprovedForAll(msg.sender, address(this))==true,"approve marketplace");
+        for(uint i=0; i<_nftid.length;i++){
+            require(supported[_nftAddress[i]]==true);
+            require(_nftAddress[i].isApprovedForAll(msg.sender, address(this))==true,"approve marketplace");
             // require(_nft.getApproved(id) == address(this),"approve marketplace");
-            require(_collection[i].nft.ownerOf(_collection[i].id)==msg.sender);
-            collection[collectionCount].collectionItem[i]=_collection[i];
+            require(_nftAddress[i].ownerOf(_nftid[i])==msg.sender);
+            collection[collectionCount].nftId.push(_nftid[i]);
+            collection[collectionCount].nftAddress.push(_nftAddress[i]);
         }
-        collection[collectionCount].nftCount =_collection.length;
+        collection[collectionCount].nftCount =_nftAddress.length;
         collection[collectionCount].price =_price;
         collection[collectionCount].tokenAddress =_tokenAddress;
         collectionCount++;
         // collection[collectionCount] = _collection;
-        emit collectionSaleEvent(msg.sender,_collection,_price,_tokenAddress);
+        emit collectionSaleEvent(msg.sender,_nftAddress,_nftid,_price,_tokenAddress);
         
     }
 
     function bidForCollection(uint256 _id,uint256 price) external {
         IERC20 token=collection[_id].tokenAddress;
-        require(price > collection[_id].price);
-        require(token.balanceOf(msg.sender)>=price);
+        require(price > collection[_id].price,"you are low on balance");
+        require(token.balanceOf(msg.sender)>=price,"bid price is too low");
         if(price > collectionbids[_id].bid){
             if(collectionbids[_id].bid !=0){
                 token.transfer(collectionbids[_id].by, collectionbids[_id].bid);
             }
             require(token.transferFrom(msg.sender, address(this), price));
             collectionbids[_id] = bid(_id,msg.sender,price);
-            // emit collectionBidEvent(msg.sender,collection[_id].collectionItem,price);
+            emit collectionBidEvent(msg.sender,collection[_id].nftAddress,collection[_id].nftId,price);
 
         }else{
             revert("bid too low");
@@ -112,19 +117,16 @@ contract MarketPlace1 is Ownable {
         IERC20 token=collection[_id].tokenAddress;
 
         for(uint256 i=0;i<collection[_id].nftCount;i++){
-            require(collection[_id].collectionItem[i].nft.ownerOf(collection[_id].collectionItem[i].id)==msg.sender);
+            require(collection[_id].nftAddress[i].ownerOf(collection[_id].nftId[i])==msg.sender,"The Nft doesnt belong to you");
         }
 
         for(uint256 i=0;i<collection[_id].nftCount;i++){
-            collection[_id].collectionItem[i].nft.transferFrom(msg.sender,collectionbids[_id].by,collection[_id].collectionItem[i].id);
+            collection[_id].nftAddress[i].transferFrom(msg.sender,collectionbids[_id].by,collection[_id].nftId[i]);
         }
         
         token.transfer(msg.sender, collectionbids[_id].id);
 
-        // require(collection[id].nft.ownerOf(catalog[id].id) == msg.sender);
-        // catalog[id].nft.transferFrom(msg.sender,bids[id].by,catalog[id].id);
-        // token.transfer(msg.sender, bids[id].bid);
-        // emit buyEvent(bids[id].by,msg.sender,bids[id].bid,catalog[id].nft,catalog[id].id);
+        emit collectionBuyEvent(collectionbids[_id].by,msg.sender,collectionbids[_id].bid,collection[_id].nftAddress,collection[_id].nftId);
         delete collectionbids[_id];
     }
 

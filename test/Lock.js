@@ -349,3 +349,106 @@ describe("NFTMarketplace", function () {
     });
   });
 });
+
+describe("dynamic", function () {
+  let nft;
+  let nft2;
+  let nft3;
+  let mytoken;
+  let mytoken2;
+  let marketplace;
+  let deployer;
+  let addr1;
+  let addr2;
+  let addrs;
+
+  let URI = "sample URI";
+
+  beforeEach(async function () {
+    // Get the ContractFactories and Signers here.
+    const NFT = await ethers.getContractFactory("NFT");
+    const MyToken = await ethers.getContractFactory("MyToken");
+    const Marketplace = await ethers.getContractFactory("MarketPlace1");
+    [deployer, addr1, addr2, ...addrs] = await ethers.getSigners();
+
+    // To deploy our contracts
+    nft = await NFT.deploy();
+    nft2 = await NFT.deploy();
+    nft3 = await NFT.deploy();
+
+    mytoken = await MyToken.deploy();
+    mytoken2 = await MyToken.deploy();
+
+    marketplace = await Marketplace.deploy(nft.address, mytoken.address);
+
+    await mytoken.transfer(addr1.address, toWei(1000));
+    await mytoken.transfer(addr2.address, toWei(1000));
+
+    await nft.connect(addr1).mint(URI);
+    await nft2.connect(addr1).mint(URI);
+    await nft3.connect(addr1).mint(URI);
+
+    //approving spending of nft in marketplace
+    await nft.connect(addr1).setApprovalForAll(marketplace.address, true);
+    await nft2.connect(addr1).setApprovalForAll(marketplace.address, true);
+    await nft3.connect(addr1).setApprovalForAll(marketplace.address, true);
+
+    //approving spending of erc20 token on marketplace
+    await mytoken.connect(addr1).approve(marketplace.address, toWei(1000));
+    await mytoken.connect(addr2).approve(marketplace.address, toWei(1000));
+
+    //adding nftaddress to marketplace list
+    await marketplace.approveNFtType(nft2.address);
+    await marketplace.approveNFtType(nft3.address);
+  });
+
+  it("collection sale", async function () {
+    expect(await mytoken.balanceOf(addr1.address)).to.equal(toWei(1000));
+    expect(await mytoken.balanceOf(addr2.address)).to.equal(toWei(1000));
+
+    await expect(
+      marketplace
+        .connect(addr1)
+        .collectionForSale(
+          [nft.address, nft2.address, nft3.address],
+          [1, 1, 1],
+          toWei(100),
+          mytoken.address
+        )
+    )
+      .to.emit(marketplace, "collectionSaleEvent")
+      .withArgs(
+        addr1.address,
+        [nft.address, nft2.address, nft3.address],
+        [1, 1, 1],
+        toWei(100),
+        mytoken.address
+      );
+
+    expect(await nft.ownerOf(1)).to.equal(addr1.address);
+    expect(await nft2.ownerOf(1)).to.equal(addr1.address);
+    expect(await nft3.ownerOf(1)).to.equal(addr1.address);
+
+    await expect(marketplace.connect(addr2).bidForCollection(0, toWei(101)))
+      .to.emit(marketplace, "collectionBidEvent")
+      .withArgs(
+        addr2.address,
+        [nft.address, nft2.address, nft3.address],
+        [1, 1, 1],
+        toWei(101)
+      );
+    // await marketplace.connect(addr1).sellCollectionForBid(0);
+    await expect(marketplace.connect(addr1).sellCollectionForBid(0))
+      .to.emit(marketplace, "collectionBuyEvent")
+      .withArgs(
+        addr2.address,
+        addr1.address,
+        toWei(101),
+        [nft.address, nft2.address, nft3.address],
+        [1, 1, 1]
+      );
+    expect(await nft.ownerOf(1)).to.equal(addr2.address);
+    expect(await nft2.ownerOf(1)).to.equal(addr2.address);
+    expect(await nft3.ownerOf(1)).to.equal(addr2.address);
+  });
+});
